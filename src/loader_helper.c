@@ -1,4 +1,5 @@
 #include "../common.h"
+#include "loader_helper.h"
 
 int ci_contains(const char *s, const char *needle)
 {

@@ -48,17 +48,10 @@ typedef struct {
     Verdict verdict;
 } SimResult;
 
-/* M1 loader.h */
+/* M1 loader.h (load_csv etc. in src/loader.c; load_panels in src/panels.c) */
 int  load_csv(const char *path, Dataset *ds);               /* returns 0 ok, -1 on any error */
 int  load_panels(const char *path, Panel out[], int max);   /* returns count loaded */
 void free_dataset(Dataset *ds);
-int   ci_contains(const char *s, const char *needle);        /* 1 = found, 0 = not */
-int   split_fields(char *line, char *f[], int max);          /* returns field count */
-char *trim(char *s);                                         /* trims in place, returns new start */
-int   parse_timestamp(const char *s, HourRecord *r);         /* 0 ok, -1 not a timestamp */
-int   parse_value(const char *s, double *out);               /* 0 ok, -1 blank/NaN/non-numeric */
-int   header_like(const char *first);                        /* 1 = looks like a header cell */
-void  map_columns(char *f[], int nf, int *c_irr, int *c_tmp);
 
 /* M2 yield.h */
 double panel_area_m2(const Panel *p);

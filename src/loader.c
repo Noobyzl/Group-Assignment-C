@@ -16,30 +16,45 @@
  *   - line longer than LINE_BUF - 1 characters -> row dropped (never kept truncated)
  *   - timestamp ok, value blank/NaN/non-numeric -> row kept with valid = 0
  *
+ * Range checks (flag, never crash): a row whose numbers parse but fall outside
+ * the physical limits below is kept with valid = 0, like a blank value, and
+ * counted; one summary line is printed at the end of the load.
+ *
  * load_csv() returns 0 on success and -1 on any failure. On every call, ds is
- * reset first, so free_dataset() is always safe afterwards.
+ * reset first, so free_dataset() is always safe afterwards. Because of that
+ * reset, a ds that already holds records MUST be freed before it is reloaded.
+ *
+ * load_panels() lives in panels.c; the line reader it shares is declared in
+ * loader_shared.h.
  */
 #include "../common.h"
+#include "loader_shared.h"
+#include "loader_helper.h"
 
-#define LINE_BUF   1024
-#define MAX_COLS   32
 #define INIT_CAP   8800          /* one year of hourly rows */
+
+/* Physical limits. G(i) is on a tilted plane: the solar constant is about
+ * 1361 W/m2 and cloud-edge enhancement can briefly push ground readings a
+ * little above clear-sky values, so 1500 W/m2 is a generous ceiling that no
+ * real hourly mean exceeds. Irradiance cannot be negative. Air temperature:
+ * the recorded extremes are about -90 C and +57 C; -60..60 keeps every
+ * plausible site and rejects sensor garbage such as -999 or 9999. */
+#define MAX_IRRADIANCE   1500.0
+#define MIN_TEMP_C       (-60.0)
+#define MAX_TEMP_C       60.0
 
 /* Progress of one load, shared by the helpers below. */
 typedef struct {
     int cap;                     /* allocated rows in ds->rec */
     int line_no;                 /* physical line currently being read */
     int n_valid;                 /* rows kept with valid == 1 */
+    int n_flagged;               /* rows kept with valid == 0 only because a value was out of range */
     int any_content;             /* saw at least one non-blank line */
     int seen_data;               /* saw at least one good timestamp */
     int c_irr, c_tmp;            /* column index of irradiance / temperature */
 } LoadState;
 
 /* ---- reading ---------------------------------------------------------- */
-
-#define READ_EOF       0
-#define READ_OK        1
-#define READ_TOO_LONG  2
 
 /* Read one line into buf. A line that does not fit is reported as
  * READ_TOO_LONG and the rest of it is discarded, so it is neither parsed
@@ -56,7 +71,7 @@ static void discard_rest_of_line(FILE *fp)
         ch = fgetc(fp);
 }
 
-static int read_line(FILE *fp, char *buf, int size)
+int read_line(FILE *fp, char *buf, int size)
 {
     buf[size - 2] = 1;
     buf[size - 1] = 1;
@@ -71,7 +86,7 @@ static int read_line(FILE *fp, char *buf, int size)
 }
 
 /* Skip a UTF-8 byte order mark at the start of the file. */
-static char *skip_bom(char *line)
+char *skip_bom(char *line)
 {
     if ((unsigned char)line[0] == 0xEF && (unsigned char)line[1] == 0xBB &&
         (unsigned char)line[2] == 0xBF)
@@ -105,8 +120,16 @@ static void drop_line(Dataset *ds, const LoadState *st, const char *why)
 
 /* ---- building a record ------------------------------------------------ */
 
-/* Fill the irradiance/temperature of r; valid = 0 if either is unusable. */
-static void read_values(HourRecord *r, char *f[], int nf, const LoadState *st)
+/* 1 = both values are inside the physical limits. */
+static int in_range(const HourRecord *r)
+{
+    return (r->irradiance >= 0.0 && r->irradiance <= MAX_IRRADIANCE &&
+            r->temp_c >= MIN_TEMP_C && r->temp_c <= MAX_TEMP_C);
+}
+
+/* Fill the irradiance/temperature of r; valid = 0 if either is unusable
+ * (blank/non-numeric) or physically implausible (counted in n_flagged). */
+static void read_values(HourRecord *r, char *f[], int nf, LoadState *st)
 {
     r->valid = 1;
     r->irradiance = 0.0;
@@ -115,6 +138,13 @@ static void read_values(HourRecord *r, char *f[], int nf, const LoadState *st)
         r->valid = 0;
     if (st->c_tmp >= nf || parse_value(f[st->c_tmp], &r->temp_c) != 0)
         r->valid = 0;
+    if (r->valid && !in_range(r))
+    {
+        fprintf(stderr, "load_csv: line %d flagged (G=%g W/m2, T=%g C out of range)\n",
+                st->line_no, r->irradiance, r->temp_c);
+        r->valid = 0;
+        st->n_flagged++;
+    }
     if (!r->valid)
     {
         r->irradiance = 0.0;
@@ -192,6 +222,9 @@ static int finish_load(const char *path, Dataset *ds, const LoadState *st)
         free_dataset(ds);
         return (-1);
     }
+    if (st->n_flagged > 0)
+        fprintf(stderr, "load_csv: %d row(s) flagged invalid: irradiance outside 0..%g W/m2 or temperature outside %g..%g C\n",
+                st->n_flagged, MAX_IRRADIANCE, MIN_TEMP_C, MAX_TEMP_C);
     if (st->n_valid < MIN_RECORDS)
         fprintf(stderr, "load_csv: warning: only %d valid row(s), fewer than MIN_RECORDS (%d)\n", st->n_valid, MIN_RECORDS);
     return (0);
