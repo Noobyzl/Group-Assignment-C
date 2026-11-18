@@ -148,4 +148,6 @@ void    map_columns(char *f[], int nf, int *c_irr, int *c_tmp, int comp[3])
         comp[0] = comp[1] = comp[2] = -1;   /* beam alone is not a total: keep old default */
     if (tmp >= 0)
         *c_tmp = tmp;
+    else if (irr >= 0 || comp[0] >= 0)
+        *c_tmp = -1;                        /* irradiance named but temperature not: do not guess column 2 */
 }

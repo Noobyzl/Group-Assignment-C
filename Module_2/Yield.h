@@ -12,6 +12,7 @@ double annual_generation_kwh(const Dataset *d, double kwp);    /* skips valid ==
 double specific_yield(const Dataset *d);                       /* kWh per kWp per year */
 
 /* ---- extra helpers (tell M5 they exist; the report can use them) ---- */
+double record_hours(const HourRecord *r, double dt);          /* hours one row stands for (monthly rows: real month length) */
 double time_step_hours(const Dataset *d);                      /* step between rows, from the timestamps */
 int    count_invalid_rows(const Dataset *d);                   /* how many rows have valid == 0 */
 void   monthly_generation_kwh(const Dataset *d, double kwp, double out[12]); /* out[0]=Jan ... out[11]=Dec */

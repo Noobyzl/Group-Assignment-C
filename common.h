@@ -38,6 +38,10 @@ typedef struct {
     double annual_kwh;       /* yearly energy use */
     double tariff_rm_kwh;
     Panel  panel;            /* chosen panel */
+    /* Added for the flowchart pipeline; zero = not used, so older code is unaffected. */
+    double monthly_bill_rm;  /* current monthly TNB bill */
+    double budget_rm;        /* budget for the installation */
+    double monthly_kwh;      /* monthly use derived from the bill via the TNB tiers */
 } SystemConfig;
 
 typedef enum { VERDICT_DONT, VERDICT_SMALLER, VERDICT_BUILD } Verdict;

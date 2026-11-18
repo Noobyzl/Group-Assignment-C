@@ -116,6 +116,10 @@ static int all_text(char *f[], int nf)
     double v;
     int i;
 
+    while (nf > 0 && *trim(f[nf - 1]) == '\0')
+        nf--;                                         /* trailing commas leave blank end cells */
+    if (nf == 0)
+        return (0);
     for (i = 0; i < nf; i++)
     {
         char *t = trim(f[i]);
@@ -190,7 +194,9 @@ static void read_values(HourRecord *r, char *f[], int nf, LoadState *st)
         read_components(r, f, nf, st);
     else if (st->c_irr >= nf || parse_value(f[st->c_irr], &r->irradiance) != 0)
         r->valid = 0;
-    if (st->c_tmp >= nf || parse_value(f[st->c_tmp], &r->temp_c) != 0)
+    /* c_tmp < 0: the header names an irradiance column but no temperature column, so there is
+     * no temperature to read (temp_c stays 0) */
+    if (st->c_tmp >= 0 && (st->c_tmp >= nf || parse_value(f[st->c_tmp], &r->temp_c) != 0))
         r->valid = 0;
     if (r->valid && !in_range(r))
     {
@@ -268,11 +274,101 @@ static int process_line(Dataset *ds, LoadState *st, char *line)
     return (append_record(ds, st, &r));
 }
 
+/* ---- time order and duplicates ---------------------------------------- */
+
+typedef struct {
+    long long key;               /* grows with time (minute resolution) */
+    int       idx;               /* position in the file, keeps the sort stable */
+} SortKey;
+
+static long long time_key(const HourRecord *r)
+{
+    return ((((long long)r->year * 12 + r->month) * 32 + r->day) * 24 + r->hour) * 60 + r->minute;
+}
+
+static int cmp_sortkey(const void *a, const void *b)
+{
+    const SortKey *x = a, *y = b;
+    if (x->key != y->key)
+    {
+        if (x->key < y->key)
+            return (-1);
+        return (1);
+    }
+    return (x->idx > y->idx) - (x->idx < y->idx);
+}
+
+/* Put the rows in time order and drop a repeated timestamp wherever it sits
+ * (process_line only catches a repeat right after the previous row). The
+ * first occurrence in the file is kept. Later modules measure the time step
+ * from neighbouring rows, so unsorted data would give a meaningless step and
+ * a pasted-twice file would count every hour twice. Does nothing, and
+ * allocates nothing, when the file is already strictly increasing.
+ * Returns 0 ok, -1 out of memory (ds is left untouched). */
+static int order_and_dedupe(Dataset *ds)
+{
+    SortKey *k;
+    HourRecord *out;
+    int i, kept = 0, sorted = 1, dups = 0;
+
+    for (i = 1; i < ds->n; i++)
+        if (time_key(&ds->rec[i]) <= time_key(&ds->rec[i - 1])) { sorted = 0; break; }
+    if (sorted)
+        return (0);
+
+    k = malloc((size_t)ds->n * sizeof *k);
+    out = malloc((size_t)ds->n * sizeof *out);
+    if (!k || !out)
+    {
+        free(k);
+        free(out);
+        return (-1);
+    }
+    for (i = 0; i < ds->n; i++)
+    {
+        k[i].key = time_key(&ds->rec[i]);
+        k[i].idx = i;
+    }
+    qsort(k, (size_t)ds->n, sizeof *k, cmp_sortkey);
+    for (i = 0; i < ds->n; i++)
+    {
+        if (i > 0 && k[i].key == k[i - 1].key)
+        {
+            dups++;
+            continue;                       /* same timestamp as an earlier row */
+        }
+        out[kept++] = ds->rec[k[i].idx];
+    }
+    fprintf(stderr, "load_csv: rows were not in time order; sorted by timestamp\n");
+    if (dups > 0)
+        fprintf(stderr, "load_csv: dropped %d row(s) with a repeated timestamp\n", dups);
+    memcpy(ds->rec, out, (size_t)kept * sizeof *out);
+    ds->n = kept;
+    ds->n_dropped += dups;
+    free(k);
+    free(out);
+    return (0);
+}
+
 /* ---- wrap-up ---------------------------------------------------------- */
 
 /* Report problems with the finished load. 0 ok, -1 failure (ds is freed). */
-static int finish_load(const char *path, Dataset *ds, const LoadState *st)
+static int finish_load(const char *path, Dataset *ds, LoadState *st)
 {
+    if (ds->n > 0)
+    {
+        int i;
+        if (order_and_dedupe(ds) != 0)
+        {
+            fprintf(stderr, "load_csv: out of memory\n");
+            free_dataset(ds);
+            return (-1);
+        }
+        st->n_valid = 0;                    /* recount: duplicates may have been removed */
+        for (i = 0; i < ds->n; i++)
+            if (ds->rec[i].valid)
+                st->n_valid++;
+    }
     if (ds->n_dropped > 0)
         fprintf(stderr, "load_csv: dropped %d unusable row(s)\n", ds->n_dropped);
     if (!st->any_content)
