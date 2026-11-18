@@ -13,6 +13,6 @@ char *trim(char *s);                                         /* trims in place, 
 int   parse_timestamp(const char *s, HourRecord *r);         /* 0 ok, -1 not a timestamp */
 int   parse_value(const char *s, double *out);               /* 0 ok, -1 blank/NaN/non-numeric */
 int   header_like(const char *first);                        /* 1 = looks like a header cell */
-void  map_columns(char *f[], int nf, int *c_irr, int *c_tmp);
+void  map_columns(char *f[], int nf, int *c_irr, int *c_tmp, int comp[3]);  /* comp: Gb/Gd/Gr columns or -1 */
 
 #endif

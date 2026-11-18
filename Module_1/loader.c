@@ -52,6 +52,8 @@ typedef struct {
     int any_content;             /* saw at least one non-blank line */
     int seen_data;               /* saw at least one good timestamp */
     int c_irr, c_tmp;            /* column index of irradiance / temperature */
+    int comp[3];                 /* Gb/Gd/Gr columns when the file has components, else -1 */
+    int header_error;            /* header maps irradiance and temperature to the same column */
 } LoadState;
 
 /* ---- reading ---------------------------------------------------------- */
@@ -79,7 +81,19 @@ int read_line(FILE *fp, char *buf, int size)
         return (READ_EOF);
     if (buf[size - 1] == 0 && buf[size - 2] != '\n')
     {
-        discard_rest_of_line(fp);
+        /* Buffer is full. It is still a whole line if the file ends here
+         * (no final newline) or if only the '\n' of a CRLF is left. */
+        int ch = fgetc(fp);
+
+        if (ch == EOF)
+            return (READ_OK);
+        if (ch == '\n' && buf[size - 2] == '\r')
+        {
+            buf[size - 2] = '\n';
+            return (READ_OK);
+        }
+        if (ch != '\n')
+            discard_rest_of_line(fp);
         return (READ_TOO_LONG);
     }
     return (READ_OK);
@@ -96,6 +110,22 @@ char *skip_bom(char *line)
 
 /* ---- classifying a line ----------------------------------------------- */
 
+/* 1 = every field is non-blank text (no numbers): a header, whatever its first cell says. */
+static int all_text(char *f[], int nf)
+{
+    double v;
+    int i;
+
+    for (i = 0; i < nf; i++)
+    {
+        char *t = trim(f[i]);
+
+        if (*t == '\0' || parse_value(t, &v) == 0)
+            return (0);
+    }
+    return (1);
+}
+
 /* Before the first data row, text lines and the header row are not data.
  * Returns 1 if the line was consumed (preamble or header), 0 otherwise. */
 static int consume_preamble_or_header(char *f[], int nf, int has_comma, LoadState *st)
@@ -104,9 +134,11 @@ static int consume_preamble_or_header(char *f[], int nf, int has_comma, LoadStat
         return (0);
     if (!has_comma)
         return (1);                                   /* preamble text */
-    if (header_like(f[0]))
+    if (header_like(f[0]) || all_text(f, nf))
     {
-        map_columns(f, nf, &st->c_irr, &st->c_tmp); /* header row */
+        map_columns(f, nf, &st->c_irr, &st->c_tmp, st->comp); /* header row */
+        if (st->c_irr == st->c_tmp)
+            st->header_error = 1;
         return (1);
     }
     return (0);
@@ -127,6 +159,26 @@ static int in_range(const HourRecord *r)
             r->temp_c >= MIN_TEMP_C && r->temp_c <= MAX_TEMP_C);
 }
 
+/* Components file (Gb(i), Gd(i), optional Gr(i)): irradiance = their sum.
+ * Any unusable component makes the row invalid. */
+static void read_components(HourRecord *r, char *f[], int nf, const LoadState *st)
+{
+    double v;
+    int k;
+
+    for (k = 0; k < 3; k++)
+    {
+        if (st->comp[k] < 0)
+            continue;
+        if (st->comp[k] >= nf || parse_value(f[st->comp[k]], &v) != 0)
+        {
+            r->valid = 0;
+            return;
+        }
+        r->irradiance += v;
+    }
+}
+
 /* Fill the irradiance/temperature of r; valid = 0 if either is unusable
  * (blank/non-numeric) or physically implausible (counted in n_flagged). */
 static void read_values(HourRecord *r, char *f[], int nf, LoadState *st)
@@ -134,7 +186,9 @@ static void read_values(HourRecord *r, char *f[], int nf, LoadState *st)
     r->valid = 1;
     r->irradiance = 0.0;
     r->temp_c = 0.0;
-    if (st->c_irr >= nf || parse_value(f[st->c_irr], &r->irradiance) != 0)
+    if (st->comp[0] >= 0)
+        read_components(r, f, nf, st);
+    else if (st->c_irr >= nf || parse_value(f[st->c_irr], &r->irradiance) != 0)
         r->valid = 0;
     if (st->c_tmp >= nf || parse_value(f[st->c_tmp], &r->temp_c) != 0)
         r->valid = 0;
@@ -178,6 +232,12 @@ static int append_record(Dataset *ds, LoadState *st, const HourRecord *r)
 
 /* ---- one line, start to finish ---------------------------------------- */
 
+static int is_same_time(const HourRecord *a, const HourRecord *b)
+{
+    return (a->year == b->year && a->month == b->month && a->day == b->day &&
+            a->hour == b->hour && a->minute == b->minute);
+}
+
 /* 0 = handled (kept, dropped or skipped), -1 = fatal (out of memory). */
 static int process_line(Dataset *ds, LoadState *st, char *line)
 {
@@ -199,6 +259,11 @@ static int process_line(Dataset *ds, LoadState *st, char *line)
         return (0);
     }
     st->seen_data = 1;
+    if (ds->n > 0 && is_same_time(&ds->rec[ds->n - 1], &r))
+    {
+        drop_line(ds, st, "duplicate timestamp");
+        return (0);
+    }
     read_values(&r, f, nf, st);
     return (append_record(ds, st, &r));
 }
@@ -259,6 +324,7 @@ int load_csv(const char *path, Dataset *ds)
         return (-1);
     st.c_irr = 1;
     st.c_tmp = 2;
+    st.comp[0] = st.comp[1] = st.comp[2] = -1;
     fp = fopen(path, "r");
     if (!fp)
     {
@@ -280,6 +346,13 @@ int load_csv(const char *path, Dataset *ds)
         if (process_line(ds, &st, row) != 0)
         {
             fprintf(stderr, "load_csv: out of memory\n");
+            fclose(fp);
+            free_dataset(ds);
+            return (-1);
+        }
+        if (st.header_error)
+        {
+            fprintf(stderr, "load_csv: line %d: header gives irradiance and temperature the same column (one of them is not named)\n", st.line_no);
             fclose(fp);
             free_dataset(ds);
             return (-1);

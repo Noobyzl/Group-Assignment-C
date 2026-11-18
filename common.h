@@ -18,6 +18,7 @@ typedef struct {
     double irradiance;       /* W/m2, say whether horizontal or tilted */
     double temp_c;           /* deg C */
     int    valid;            /* 1 = numbers usable, 0 = blank/NaN/non-numeric */
+    int    minute;           /* 0..59; kept last so older positional initialisers still compile */
 } HourRecord;
 
 typedef struct {

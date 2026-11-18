@@ -17,6 +17,9 @@
  * rated_w <= 0, length <= 0, width <= 0, price < 0, or a length/width above
  * MAX_PANEL_SIDE_M (almost certainly millimetres typed in a metres column).
  * A name longer than 31 characters is truncated with a warning.
+ * A line longer than LINE_BUF - 1 characters is still accepted when its first
+ * 5 fields are complete (a 6th field exists), so a very long "source" cell
+ * cannot kill an otherwise valid row; otherwise it is rejected as too long.
  *
  * Returns the number of panels stored in out[0..max-1]. Returns 0 (after a
  * message on stderr) for a NULL path/out, max <= 0, or a file that cannot be
@@ -64,7 +67,7 @@ int load_panels(const char *path, Panel out[], int max)
     char line[LINE_BUF], *row, *s, *f[MAX_COLS];
     const char *why;
     double tmp;
-    int n = 0, line_no = 0, first = 1, status, nf;
+    int n = 0, line_no = 0, first = 1, status, nf, truncated;
 
     if (!path || !out || max <= 0)
         return (0);
@@ -77,11 +80,7 @@ int load_panels(const char *path, Panel out[], int max)
     while ((status = read_line(fp, line, sizeof line)) != READ_EOF)
     {
         line_no++;
-        if (status == READ_TOO_LONG)
-        {
-            fprintf(stderr, "load_panels: line %d rejected (line too long)\n", line_no);
-            continue;
-        }
+        truncated = (status == READ_TOO_LONG);
         row = line;
         if (line_no == 1)
             row = skip_bom(line);
@@ -89,6 +88,11 @@ int load_panels(const char *path, Panel out[], int max)
         if (*s == '\0')
             continue;
         nf = split_fields(s, f, MAX_COLS);
+        if (truncated && nf <= PANEL_FIELDS)
+        {
+            fprintf(stderr, "load_panels: line %d rejected (line too long)\n", line_no);
+            continue;
+        }
         if (first)
         {
             first = 0;

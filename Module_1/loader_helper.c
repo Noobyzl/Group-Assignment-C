@@ -86,6 +86,7 @@ int parse_timestamp(const char *s, HourRecord *r)
     r->month = mo;
     r->day = d;
     r->hour = h;
+    r->minute = mi;
     return (0);
 }
 
@@ -118,7 +119,7 @@ int header_like(const char *first)
 }
 
 /* Work out column positions from a header row. */
-void    map_columns(char *f[], int nf, int *c_irr, int *c_tmp)
+void    map_columns(char *f[], int nf, int *c_irr, int *c_tmp, int comp[3])
 {
     int i, irr = -1, tmp = -1;
     for (i = 1; i < nf; i++)
@@ -129,9 +130,22 @@ void    map_columns(char *f[], int nf, int *c_irr, int *c_tmp)
             irr = i;
         else if (tmp < 0 && (ci_contains(name, "T2m") || ci_contains(name, "temp")))
             tmp = i;
+        if (comp[0] < 0 && ci_contains(name, "Gb(i)"))
+            comp[0] = i;                    /* beam */
+        else if (comp[1] < 0 && ci_contains(name, "Gd(i)"))
+            comp[1] = i;                    /* diffuse */
+        else if (comp[2] < 0 && ci_contains(name, "Gr(i)"))
+            comp[2] = i;                    /* ground-reflected */
     }
     if (irr >= 0)
+    {
         *c_irr = irr;
+        comp[0] = comp[1] = comp[2] = -1;   /* a total column wins over components */
+    }
+    else if (comp[0] >= 0 && comp[1] >= 0)
+        *c_irr = comp[0];                   /* components mode: irradiance = Gb + Gd (+ Gr) */
+    else
+        comp[0] = comp[1] = comp[2] = -1;   /* beam alone is not a total: keep old default */
     if (tmp >= 0)
         *c_tmp = tmp;
 }
