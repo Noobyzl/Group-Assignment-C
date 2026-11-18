@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <math.h>
+#include <limits.h>
 
 typedef struct {
     int    year, month, day, hour;
@@ -39,7 +40,7 @@ typedef struct {
     Panel  panel;            /* chosen panel */
 } SystemConfig;
 
-typedef enum { VERDICT_BUILD, VERDICT_SMALLER, VERDICT_DONT } Verdict;
+typedef enum { VERDICT_DONT, VERDICT_SMALLER, VERDICT_BUILD } Verdict;
 
 typedef struct {
     int     n_panels;
@@ -66,6 +67,7 @@ double  offset_pct(double gen_kwh, double use_kwh);                /* capped at 
 double  payback_years(double capex_rm, double saving_rm_per_year);
 Verdict decide(double offset_pct, double payback_years);
 const char *verdict_text(Verdict v);
+const char *decide_reason(double offset_pct, double payback_years);  /* why decide() gave its verdict */
 
 /* M4 impact.h / sweep.h */
 double co2_avoided_kg(double kwh);

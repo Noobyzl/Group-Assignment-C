@@ -4,7 +4,6 @@
 #ifndef LOADER_SHARED_H
 #define LOADER_SHARED_H
 
-#include <stdio.h>
 
 #define LINE_BUF   1024      /* longest accepted line is LINE_BUF - 1 characters */
 #define MAX_COLS   32

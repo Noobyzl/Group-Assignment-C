@@ -10,9 +10,6 @@
      power       kW          energy      kWh
    ============================================================ */
 
-#include <stdio.h>
-#include <math.h>
-#include <limits.h>
 #include "Yield.h"
 
 
