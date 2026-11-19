@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solar Planner Module Split and To-Dos</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --card:#fff; --text:#1c2330; --muted:#5a6475; --line:#dce1e9;
+    --accent:#0a5fb4; --soft:#e7f0fb; --warn:#a24b00; --warn-soft:#fff1de; --ok:#1a7f4b;
+    --m1:#0a5fb4; --m2:#7a3fb0; --m3:#c0392b; --m4:#1a7f4b; --m5:#b26a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#12161c; --card:#1b212a; --text:#e6eaf0; --muted:#98a3b4; --line:#2c3542;
+      --accent:#6db2ff; --soft:#1b2b3f; --warn:#f5b25c; --warn-soft:#3a2c16; --ok:#5fd394;
+      --m1:#6db2ff; --m2:#c39bf0; --m3:#ff8b7d; --m4:#5fd394; --m5:#f5b25c;
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:940px; margin:0 auto; padding:32px 16px 72px; }
+  .tag { font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); font-weight:600; }
+  h1 { font-size:28px; line-height:1.25; margin:6px 0 6px; }
+  h2 { font-size:20px; margin:32px 0 12px; }
+  h3 { font-size:15px; margin:18px 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .sub { color:var(--muted); margin:0; }
+  section, .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin-bottom:14px; }
+  .warn { background:var(--warn-soft); border-color:var(--warn); }
+  .warn h2 { color:var(--warn); margin-top:0; }
+  ul, ol { margin:6px 0; padding-left:22px; } li { margin:4px 0; }
+  table { width:100%; border-collapse:collapse; font-size:14.5px; }
+  th,td { text-align:left; padding:8px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; }
+  tr:last-child td { border-bottom:0; }
+  code, pre { font:13px ui-monospace,Consolas,monospace; }
+  code { background:var(--soft); padding:1px 5px; border-radius:4px; }
+  pre { background:var(--soft); padding:14px; border-radius:8px; overflow-x:auto; line-height:1.5; margin:8px 0; }
+  .mod { border-left:5px solid var(--c); }
+  .mod header { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:baseline; justify-content:space-between; }
+  .mod h2 { margin:0; color:var(--c); }
+  .name { font:inherit; border:1px dashed var(--line); background:transparent; color:var(--text); border-radius:6px; padding:3px 8px; width:210px; max-width:100%; }
+  .meta { color:var(--muted); font-size:14px; margin:4px 0 0; }
+  .wk { font-weight:700; font-size:13px; color:var(--c); margin:14px 0 2px; }
+  label.t { display:flex; gap:10px; align-items:flex-start; padding:3px 0; cursor:pointer; }
+  label.t input { margin-top:6px; accent-color:var(--c); flex:none; width:16px; height:16px; }
+  label.t input:checked + span { color:var(--muted); text-decoration:line-through; }
+  .bar { height:6px; background:var(--line); border-radius:4px; overflow:hidden; margin:10px 0 2px; }
+  .bar i { display:block; height:100%; width:0; background:var(--c); transition:width .2s; }
+  .prog { font-size:13px; color:var(--muted); }
+  .done { background:var(--soft); border-radius:8px; padding:10px 12px; margin-top:12px; font-size:14.5px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin:8px 0; }
+  .wkbox { background:var(--soft); border-radius:8px; padding:8px 10px; font-size:13.5px; }
+  .wkbox b { display:block; color:var(--accent); }
+  .scroll { overflow-x:auto; }
+  table.gantt { min-width:700px; table-layout:fixed; border-collapse:separate; border-spacing:6px; }
+  table.gantt th { font-size:13px; text-transform:none; letter-spacing:0; color:var(--text); border:0; padding:4px 2px; }
+  table.gantt th span { display:block; font-weight:400; color:var(--muted); font-size:12px; }
+  table.gantt th.rowh { width:110px; color:var(--c); font-size:14px; }
+  table.gantt td { padding:0; border:0; }
+  .cell { position:relative; background:var(--soft); border-left:4px solid var(--c); border-radius:6px; padding:8px 8px 12px; min-height:78px; overflow:hidden; }
+  .cell b { display:block; font-size:13px; line-height:1.3; position:relative; }
+  .cell small { display:block; color:var(--muted); font-size:12px; margin-top:4px; position:relative; }
+  .cell i { position:absolute; left:0; bottom:0; height:5px; background:var(--c); }
+  @media (max-width:560px){ h1{font-size:23px;} section,.card{padding:14px;} th,td{padding:7px 5px;font-size:13.5px;} }
+  @media print { body{background:#fff;} .card,section{break-inside:avoid;} }
+</style>
+</head>
+<body>
+<main>
+  <div class="tag">EEEB1014 · Theme E (adapted) · Solar Build Decision Planner</div>
+  <h1>Module split and to-do lists</h1>
+  <p class="sub">Five members, five distinct modules, one integrated menu-driven C program that tells a user whether to build solar, given their area and yearly energy use. Tick boxes save in this browser. Type each teammate's name into their module card.</p>
+
+  <section class="warn">
+    <h2>What the briefing means for this plan</h2>
+    <ol>
+      <li><b>Theme E's bullet points are suggestions, but a custom topic needs lecturer approval by Week 10.</b> Our "build or don't build" variant reshapes Theme E (SDG 7.1), so ask the lecturer to confirm it early, in writing.</li>
+      <li><b>The lecturer supplies a second test file on demo day.</b> The main program must read one plain, documented CSV layout and never assume a row count or a time step. Ask the lecturer for the exact column order, header and timestamp format as early as possible.</li>
+      <li><b>CO₂ factor is fixed: 0.758 kg CO₂/kWh</b>, from the briefing, stored as a <code>#define</code>.</li>
+      <li><b>At least 50 records and a stated data source.</b> An hourly year is about 8,760 rows. Record where the data came from and what it is (location, irradiance type, tilt or horizontal).</li>
+      <li><b>At least 2 key results must be recomputed in Python or MATLAB</b> and compared with the C output. Python is the mandatory choice, and each member checks one result from their own module.</li>
+      <li><b>Every member defends their own module in Q&amp;A</b> and writes an individual report (max 10 pages). Each module therefore includes its own Python check, tests and report notes.</li>
+      <li><b>Max two groups per option</b>, first come first served. Confirm Theme E is secured.</li>
+    </ol>
+  </section>
+
+  <h2>Overview</h2>
+  <section>
+    <table>
+      <tr><th>#</th><th>Module</th><th>Brief name</th><th>Core files</th><th>Python / MATLAB check</th></tr>
+      <tr><td><b>M1</b></td><td>Data loader and validation</td><td>M1 Data loader</td><td><code>loader.c/h</code>, <code>common.h</code>, <code>panels.csv</code></td><td>Row count, mean irradiance, annual total irradiation</td></tr>
+      <tr><td><b>M2</b></td><td>Capacity and yield</td><td>M2 Calculations</td><td><code>yield.c/h</code></td><td>Panels that fit, kWp, annual kWh generated, specific yield</td></tr>
+      <tr><td><b>M3</b></td><td>Decision logic</td><td>M3 Decision logic</td><td><code>decision.c/h</code></td><td>Offset %, payback years, verdict on test cases</td></tr>
+      <tr><td><b>M4</b></td><td>Scenario sweep and impact</td><td>M4 Simulation or impact</td><td><code>impact.c/h</code>, <code>sweep.c/h</code></td><td>CO₂ avoided, RM saved, best array size in the sweep</td></tr>
+      <tr><td><b>M5</b></td><td>Report, search, menu and build lead</td><td>M5 Report and search</td><td><code>report.c/h</code>, <code>search.c/h</code>, <code>main.c</code>, <code>Makefile</code>, <code>python/compare.py</code></td><td>Reads every export and prints the C-vs-Python difference table, draws the plots</td></tr>
+    </table>
+    <h3>Folder layout</h3>
+<pre>solar_planner/
+  src/        main.c  common.h  loader.c/h  yield.c/h  decision.c/h  impact.c/h  sweep.c/h  report.c/h  search.c/h
+  data/       solar_hourly.csv  panels.csv  second_test_sample.csv
+  output/     report.txt  results.csv  sweep.csv  monthly.csv
+  python/     recalc_m1.py ... recalc_m4.py  compare.py
+  matlab/     (optional) recalc_key_results.m
+  docs/       logbook.md  debug_log.md  proposal.md
+  Makefile</pre>
+    <h3>Timeline (from the briefing)</h3>
+    <div class="grid">
+      <div class="wkbox"><b>Week 10</b>One-page proposal, member-to-module allocation, flowchart</div>
+      <div class="wkbox"><b>Week 11</b>Working loader and agreed function prototypes</div>
+      <div class="wkbox"><b>Week 12</b>Each module runs on the data</div>
+      <div class="wkbox"><b>Week 13</b>Integration, menu program, Python/MATLAB plots</div>
+      <div class="wkbox"><b>Week 14</b>Demo, individual report, peer evaluation</div>
+    </div>
+  </section>
+
+  <h2>To-do and time chart</h2>
+  <section>
+    <p class="meta">Rows are people, columns are weeks. Each cell shows that week's milestone and how many of its to-dos are ticked below. The bar at the bottom of a cell fills as tasks are completed. Scroll sideways on a phone.</p>
+    <div id="chart"></div>
+  </section>
+
+  <h2>Shared contract (agree this in Week 10, freeze it in Week 11)</h2>
+  <section>
+    <p class="meta">Everyone includes <code>common.h</code>. Only M1 edits the structs, and any change goes through the group chat. The briefing requires arrays of struct, pointer parameters, user-defined functions with return values, <code>#define</code> constants, <code>switch</code> and loops, so these prototypes already use them. Numeric values marked "assumption" are placeholders to be sourced or justified.</p>
+<pre>/* common.h */
+#define CO2_KG_PER_KWH     0.758     /* grid factor from the brief */
+#define MIN_RECORDS        50
+#define PERF_RATIO         0.80      /* assumption: cite or justify */
+#define USABLE_FRACTION    0.70      /* assumption: share of site area that can hold panels */
+#define MAX_PANELS_CATALOGUE 20
+
+typedef struct {
+    int    year, month, day, hour;
+    double irradiance;       /* W/m2, say whether horizontal or tilted */
+    double temp_c;           /* deg C */
+    int    valid;            /* 1 = numbers usable, 0 = blank/NaN/non-numeric */
+} HourRecord;
+
+typedef struct {
+    HourRecord *rec;
+    int         n;           /* rows kept (valid or not) */
+    int         n_dropped;   /* rows dropped: unparseable timestamp */
+} Dataset;
+
+typedef struct {
+    char   name[32];
+    double rated_w, length_m, width_m, price_rm;
+} Panel;
+
+typedef struct {
+    double area_m2;          /* site area the user can build on */
+    double annual_kwh;       /* yearly energy use */
+    double tariff_rm_kwh;
+    Panel  panel;            /* chosen panel */
+} SystemConfig;
+
+typedef enum { VERDICT_BUILD, VERDICT_SMALLER, VERDICT_DONT } Verdict;
+
+typedef struct {
+    int     n_panels;
+    double  kwp, annual_gen_kwh, offset_pct;
+    double  capex_rm, saving_rm_per_year, payback_years;
+    double  co2_avoided_kg;
+    Verdict verdict;
+} SimResult;
+
+/* M1 loader.h */
+int  load_csv(const char *path, Dataset *ds);               /* returns 0 ok, nonzero error code */
+int  load_panels(const char *path, Panel out[], int max);   /* returns count loaded */
+void free_dataset(Dataset *ds);
+
+/* M2 yield.h */
+double panel_area_m2(const Panel *p);
+int    panels_that_fit(double site_area_m2, const Panel *p);       /* floor(usable area / panel area) */
+double array_kwp(int n_panels, const Panel *p);
+double annual_generation_kwh(const Dataset *d, double kwp);        /* skips valid == 0 rows */
+double specific_yield(const Dataset *d);                           /* kWh per kWp per year */
+
+/* M3 decision.h */
+double  offset_pct(double gen_kwh, double use_kwh);                /* capped at 100 */
+double  payback_years(double capex_rm, double saving_rm_per_year);
+Verdict decide(double offset_pct, double payback_years);
+const char *verdict_text(Verdict v);
+
+/* M4 impact.h / sweep.h */
+double co2_avoided_kg(double kwh);
+double saving_rm(double gen_kwh, double use_kwh, double tariff);   /* capped at use */
+int    sweep_panels(const Dataset *d, const SystemConfig *cfg, SimResult out[], int max);  /* loops 1..max panels */
+int    best_index(const SimResult out[], int n);
+
+/* M5 report.h / search.h */
+int  write_report(const char *path, const SystemConfig *cfg, const SimResult *res);
+int  export_csvs(const char *dir, const Dataset *d, const SimResult sweep[], int n);
+void search_menu(const Dataset *d, const SimResult sweep[], int n);</pre>
+  </section>
+
+  <h2>Modules</h2>
+  <div id="mods"></div>
+
+  <h2>Team-wide to-dos (nobody owns these alone)</h2>
+  <div id="team"></div>
+
+  <section class="warn">
+    <h2>Decisions still open</h2>
+    <ul>
+      <li><b>Who the planner is for:</b> a household, a building or a village. This sets the scale of the numbers, the default area and the default annual energy.</li>
+      <li><b>Location and data source:</b> pick coordinates first. NASA POWER and PVGIS both offer hourly data. Confirm the real column names and whether the irradiance is horizontal or tilted after downloading.</li>
+      <li><b>Dataset option:</b> hourly year (recommended, about 8,760 rows) or multi-site monthly data (at least 50 rows).</li>
+      <li><b>Panel handling:</b> the user types one panel's specs (core), or the program reads a small catalogue from <code>panels.csv</code> and compares panels (stretch). Specs must come from real datasheets with sources.</li>
+      <li><b>Verdict thresholds:</b> the maximum acceptable payback and the minimum offset % for BUILD vs BUILD SMALLER vs DON'T BUILD. Cite a source or state them as assumptions in the proposal.</li>
+      <li><b>Tariff and cost values:</b> M4 looks up a current tariff and typical installed cost per kWp, and cites the source and date in the report.</li>
+      <li><b>Battery stretch goal:</b> in or out of scope. Treat it as optional once the core works.</li>
+      <li><b>Second-file format:</b> ask the lecturer for a sample or the column spec. Until then the loader assumes <code>timestamp,irradiance,temp_c</code> with an optional header.</li>
+      <li><b>M5 carries the lightest calculations</b> and so takes <code>main.c</code>, the Makefile and integration. Swap with someone if the load feels uneven.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+var MODS = [
+ {id:'m1', c:'var(--m1)', title:'M1 · Data loader', sub:'Brief: M1 Data loader',
+  owns:'loader.c/h, common.h, data/solar_hourly.csv, data/panels.csv',
+  weeks:[
+   ['Week 10',[
+     'Pick the location (coordinates) with the group and download one year of hourly solar data. Record the source, the date downloaded and what the columns mean (horizontal or tilted irradiance, units).',
+     'Write the "data source and assumptions" paragraph for the proposal (at least 50 records, stated source).',
+     'Draft <code>common.h</code> (<code>HourRecord</code>, <code>Dataset</code>, <code>Panel</code>, constants) and circulate it to the group.',
+     'Email the lecturer: ask for the exact column order, header and timestamp format of the second test file, and confirm the Theme E adaptation is acceptable.']],
+   ['Week 11',[
+     'Implement <code>load_csv()</code>: <code>fopen</code> with NULL check, <code>fgets</code> and <code>sscanf</code>, <code>malloc</code>/<code>realloc</code> growth, <code>fclose</code>.',
+     'Handle optional header, blank lines, CRLF vs LF and trailing commas.',
+     'Drop rows whose timestamp cannot be parsed (print the line number and the dropped count to stderr, then continue). Keep rows with a good timestamp but blank, NaN or non-numeric values, with <code>valid = 0</code>.',
+     'Warn when fewer than <code>MIN_RECORDS</code> valid rows. Return clear error codes (file missing, empty, header only).',
+     'Freeze <code>common.h</code> and the prototypes so the group can build against them. Demo a working loader to the group.']],
+   ['Week 12',[
+     'Implement <code>load_panels()</code> to read <code>panels.csv</code> (name, rated W, length, width, price) into an array of <code>Panel</code>. Reject rows with zero or negative sizes.',
+     'Build <code>panels.csv</code> from real datasheets and put the source of each row in a comment column or the logbook.',
+     'Sanity-check ranges: irradiance not negative and not above a physical maximum, temperature within a plausible range. Flag, do not crash.',
+     'Implement <code>free_dataset()</code> and check for leaks and double frees.']],
+   ['Week 13',[
+     'Build a loader test set: clean file, malformed file (text in a numeric field, missing column), empty file, header-only file, 30-row file, a file with a different time step.',
+     '<code>python/recalc_m1.py</code>: read the same file with pandas and compare row count, mean irradiance and annual total irradiation against what C prints (key result cross-check).',
+     'Run the loader against the lecturer\'s sample file if you have it.']],
+   ['Week 14',[
+     'Add at least one bug to <code>docs/debug_log.md</code> (symptom, how found, fix).',
+     'Individual report: loader design, flowchart, tests, Python cross-check, AI declaration.',
+     'Rehearse Q&amp;A: why <code>realloc</code>, what happens on a bad row, what if the file has no header.']]
+  ],
+  done:'Any plain CSV with the agreed columns loads into <code>HourRecord[]</code> without crashing. Bad rows are reported, not fatal. Python agrees on the counts and means.'},
+
+ {id:'m2', c:'var(--m2)', title:'M2 · Capacity and yield', sub:'Brief: M2 Calculations',
+  owns:'yield.c/h',
+  weeks:[
+   ['Week 10',[
+     'Write each formula with units: panel area (length × width), panels that fit (floor of usable area ÷ panel area), array kWp, hourly power (kWp × irradiance ÷ 1000 × performance ratio), annual kWh, specific yield (kWh/kWp).',
+     'Decide and justify <code>PERF_RATIO</code> and <code>USABLE_FRACTION</code>, with a source or a stated assumption.',
+     'Allocate members to modules in the proposal text.']],
+   ['Week 11',[
+     'Agree the yield prototypes with the group (see the shared contract) and freeze them.',
+     'Write stub functions that return fixed numbers so M3, M4 and M5 can compile against them.']],
+   ['Week 12',[
+     'Implement <code>panel_area_m2()</code>, <code>panels_that_fit()</code> (use floor, never half a panel) and <code>array_kwp()</code>.',
+     'Implement <code>annual_generation_kwh()</code> over the dataset, skipping <code>valid = 0</code> rows and reporting how many were skipped. Do not assume 8,760 rows or a 1-hour step: use the file\'s own timestamps.',
+     'Implement <code>specific_yield()</code> and monthly totals for the report.',
+     'Handle edge cases: zero area, zero irradiance all year, panel larger than the site, n = 0.']],
+   ['Week 13',[
+     '<code>python/recalc_m2.py</code>: recompute panels that fit, kWp, annual kWh and specific yield from the same CSV and compare (key results 1 and 2).',
+     'Test with two very different panels (small low-power, large high-power) and confirm the kWp changes the way the formulas say.',
+     'Run a dry run with a differently shaped CSV and check nothing is hard-coded.']],
+   ['Week 14',[
+     'Add at least one bug to <code>docs/debug_log.md</code>.',
+     'Individual report: yield design, formulas, assumptions, cross-check.',
+     'Rehearse Q&amp;A: why <code>floor</code>, what performance ratio means, how a different panel changes the answer.']]
+  ],
+  done:'Panels that fit, kWp and annual kWh match Python within a stated tolerance, and the numbers change correctly when the panel or area changes.'},
+
+ {id:'m3', c:'var(--m3)', title:'M3 · Decision logic', sub:'Brief: M3 Decision logic',
+  owns:'decision.c/h',
+  weeks:[
+   ['Week 10',[
+     'Define the three verdicts in plain words: BUILD, BUILD SMALLER, DON\'T BUILD, and the reason text each one prints.',
+     'Propose thresholds as <code>#define</code>s: maximum acceptable payback in years, minimum offset % for BUILD, minimum offset % for BUILD SMALLER. Find a source or mark them as assumptions.',
+     'Draw the decision flowchart for the proposal.']],
+   ['Week 11',[
+     'Agree <code>Verdict</code>, <code>SimResult</code> and the decision prototypes with the group. Freeze them.',
+     'Write a stub <code>decide()</code> that always returns BUILD so M5 can wire the menu.']],
+   ['Week 12',[
+     'Implement <code>offset_pct()</code>: generated kWh ÷ annual use, capped at 100%. Guard against zero or negative use.',
+     'Implement <code>payback_years()</code>: capex ÷ annual saving. Return a clear "never pays back" value when the saving is zero.',
+     'Implement <code>decide()</code> with <code>if/else</code> and <code>verdict_text()</code> with <code>switch</code>. Include the reason (area limit, poor solar resource, long payback).']],
+   ['Week 13',[
+     'Write test cases at every boundary: offset exactly on a threshold, payback exactly on the limit, zero saving, tiny area, huge area.',
+     '<code>python/recalc_m3.py</code>: reimplement offset %, payback and the verdict rules, and compare with C (key result).',
+     'Tune thresholds only with a recorded reason in the logbook.']],
+   ['Week 14',[
+     'Add at least one bug to <code>docs/debug_log.md</code>.',
+     'Individual report: decision rules, thresholds and justification, test cases, limits (annual totals ignore when the energy is used).',
+     'Rehearse Q&amp;A: how the verdict is chosen, what happens at a threshold, why payback can be infinite.']]
+  ],
+  done:'Every boundary test gives the expected verdict with a readable reason, and Python agrees on offset %, payback and verdict.'},
+
+ {id:'m4', c:'var(--m4)', title:'M4 · Scenario sweep and impact', sub:'Brief: M4 Simulation or impact (kWh, RM, CO₂ avoided)',
+  owns:'impact.c/h, sweep.c/h',
+  weeks:[
+   ['Week 10',[
+     'Look up a current domestic electricity tariff for the chosen country and a typical installed cost per kWp. Record the rates, source and date.',
+     'Decide the saving rule: savings = kWh generated (capped at annual use) × tariff, with no export credit. State it as an assumption.',
+     'Write the "SDG target and scaling assumptions" part of the proposal.']],
+   ['Week 11',[
+     'Agree the impact and sweep prototypes. Freeze them.',
+     'Define <code>CO2_KG_PER_KWH 0.758</code> in <code>common.h</code> with M1.',
+     'Stub <code>co2_avoided_kg()</code> so the menu has something to call.']],
+   ['Week 12',[
+     'Implement <code>co2_avoided_kg()</code> and <code>saving_rm()</code> (capped at annual use).',
+     'Implement <code>sweep_panels()</code>: loop from 1 panel up to the number that fits, filling an array of <code>SimResult</code> (kWp, generation, offset, payback, verdict).',
+     'Implement <code>best_index()</code> to pick the best option and explain why it is best (for example shortest payback that reaches the offset target).',
+     'Optional stretch: loop over the panel catalogue and compare panels.']],
+   ['Week 13',[
+     'Edge cases: generation above annual use (saving capped), zero tariff, area that fits no panels.',
+     '<code>python/recalc_m4.py</code>: recompute CO₂ avoided, annual saving and the best array size from the same inputs and compare (key result).',
+     'Hand-check one scenario on paper and put it in the report.']],
+   ['Week 14',[
+     'Add at least one bug to <code>docs/debug_log.md</code>.',
+     'Individual report: quantified SDG impact in kWh, RM and kg CO₂ with assumptions and limits (no export credit, annual totals).',
+     'Rehearse Q&amp;A: why 0.758, how the sweep chooses the best size, what the scale-up assumes.']]
+  ],
+  done:'CO₂ avoided, savings and the best array size all match Python and a hand calculation, and the assumptions are printed with the results.'},
+
+ {id:'m5', c:'var(--m5)', title:'M5 · Report, search and menu', sub:'Brief: M5 Report and search. Also owns main menu, Makefile, integration and the C-vs-Python comparison and plots',
+  owns:'report.c/h, search.c/h, main.c, Makefile, python/compare.py',
+  weeks:[
+   ['Week 10',[
+     'Draft the layout of <code>report.txt</code>: data source, assumptions, user inputs, headline results, verdict with reason, sweep table.',
+     'Draw the whole-program flowchart (menu → load → yield → decision → sweep → report/search) for the proposal.',
+     'List the searches (by month, by panel size, best option, results above a payback limit) with example inputs and outputs.']],
+   ['Week 11',[
+     'Write a stub <code>main.c</code> menu using <code>switch</code> and a loop, with empty stub functions for every module so the project compiles on day one.',
+     'Write the <code>Makefile</code> (gcc, -Wall -Wextra) and agree the folder layout. Confirm everyone can build.',
+     'Agree the report, search and CSV export columns with everyone (Python reads these). Freeze them.']],
+   ['Week 12',[
+     'Implement <code>write_report()</code> with <code>fprintf</code> (file and terminal). Check <code>fopen</code> for NULL on write.',
+     'Implement <code>export_csvs()</code>: <code>results.csv</code>, <code>sweep.csv</code>, <code>monthly.csv</code>.',
+     'Implement search: by month, by panel count, best option, and options meeting a payback limit. Validate input and handle no-result searches cleanly.',
+     'Menu input robustness: read with <code>fgets</code>, validate numbers, re-prompt on junk.']],
+   ['Week 13',[
+     'Integration: wire all modules into the menu and run a full session on our dataset and the second sample file.',
+     '<code>python/compare.py</code>: read the C exports and each member\'s recalculation, print one difference table (metric, C value, Python value, abs and relative error, PASS/FAIL with the tolerance).',
+     'Plots: daily profile, monthly generation vs use, array size vs payback. Save PNGs.',
+     'Test the menu and search with bad input: letters, negatives, empty entry, N larger than the data.',
+     'Lecturer-style dry run: swap in a different CSV and check nothing is hard-coded to this dataset.']],
+   ['Week 14',[
+     'Add at least one bug to <code>docs/debug_log.md</code>.',
+     'Prepare the demo script: the order of menu choices, the plots to show, and the second test file run.',
+     'Individual report: whole-program flowchart, report format, search design, how the comparison works.',
+     'Rehearse Q&amp;A: how the menu avoids bad input, how the comparison picks a tolerance, what the differences mean.']]
+  ],
+  done:'The report and exports are produced from the menu, searches fail gracefully, and compare.py prints a clean PASS table with plots.'}
+];
+
+var TEAM = {id:'team', c:'var(--accent)', title:'Everyone', sub:'Shared evidence the briefing requires',
+ weeks:[
+  ['Week 10',[
+    'Confirm Theme E is secured with the lecturer (max two groups per option) and that the adapted "build or don\'t build" topic is approved.',
+    'Submit the one-page proposal: problem, SDG target, objectives, data source, member-to-module allocation, flowchart.',
+    'Start <code>docs/logbook.md</code>: meeting dates, attendance, decisions, tasks. Rotate who writes each meeting.']],
+  ['Week 11',[
+    'Group checkpoint: loader works and function prototypes are agreed. Everyone compiles with <code>make</code>.',
+    'Start <code>docs/debug_log.md</code>: at least three bugs for the group, each with symptom, how found and fix.']],
+  ['Week 12',[
+    'Every module runs on the data on its own. Share each person\'s test cases.',
+    'Agree the comparison tolerance for C vs Python/MATLAB.']],
+  ['Week 13',[
+    'Integration run on our dataset plus a second, differently shaped file (different row count, extra bad rows).',
+    'Check the checklist: one program, a distinct module per member, 50+ records with a stated source, required C constructs, plots and two cross-checks, kWh/RM/CO₂ with assumptions.']],
+  ['Week 14',[
+    'Rehearse the 15-minute demo: own dataset, lecturer\'s second file, text report, Python/MATLAB plots, explain the SDG impact.',
+    'Every member practises showing and defending their own module. Missing the demo or the report is an automatic fail.',
+    'Each member: individual PDF (max 10 pages plus appendices with full module code and debug log), AI tool declaration, peer evaluation.']]
+ ]};
+
+function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;} }
+
+function render(m, withName){
+  var el = document.createElement('div');
+  el.className = 'card mod'; el.style.setProperty('--c', m.c);
+  var h = '<header><div><h2>'+m.title+'</h2><p class="meta">'+m.sub+'</p>'+(m.owns?'<p class="meta">Owns: '+m.owns+'</p>':'')+'</div>';
+  if(withName) h += '<input class="name" id="name-'+m.id+'" placeholder="Member name" aria-label="Member name for '+m.title+'">';
+  h += '</header><div class="bar"><i id="bar-'+m.id+'"></i></div><div class="prog" id="prog-'+m.id+'"></div>';
+  var n = 0;
+  m.weeks.forEach(function(w){
+    h += '<div class="wk">'+w[0]+'</div>';
+    w[1].forEach(function(t){
+      var id = m.id+'-'+(n++);
+      h += '<label class="t"><input type="checkbox" data-m="'+m.id+'" id="'+id+'"><span>'+t+'</span></label>';
+    });
+  });
+  if(m.done) h += '<div class="done"><b>Done when:</b> '+m.done+'</div>';
+  el.innerHTML = h; m.total = n;
+  return el;
+}
+function update(m){
+  var boxes = document.querySelectorAll('input[data-m="'+m.id+'"]'), d = 0;
+  boxes.forEach(function(b){ if(b.checked) d++; });
+  document.getElementById('bar-'+m.id).style.width = (100*d/boxes.length)+'%';
+  document.getElementById('prog-'+m.id).textContent = d+' of '+boxes.length+' done';
+  renderChart();
+}
+var WKS = ['Week 10','Week 11','Week 12','Week 13','Week 14'];
+var WKCAP = ['Proposal due','Loader + prototypes','Each module runs','Integration + plots','Demo + reports'];
+var SHORT = {m1:'M1 Loader', m2:'M2 Yield', m3:'M3 Decision', m4:'M4 Sweep + impact', m5:'M5 Report + menu', team:'Everyone'};
+var MILE = {
+  m1:['Source + file format','Loader works','Panels + sanity checks','Test set + Python check','Report + Q&amp;A'],
+  m2:['Formulas + assumptions','Prototypes + stubs','Yield done','Python check + tests','Report + Q&amp;A'],
+  m3:['Verdicts + thresholds','Prototypes + stub','Decision rules done','Boundary tests + check','Report + Q&amp;A'],
+  m4:['Tariff + assumptions','Prototypes + CO2 define','CO2 + sweep','Edge cases + check','Report + Q&amp;A'],
+  m5:['Report layout + flowchart','Menu stub + Makefile','Report, exports, search','Compare + plots','Demo script + Q&amp;A'],
+  team:['Proposal + logbook','Prototypes + debug log','Modules run','Integration run','Demo + submissions']
+};
+function renderChart(){
+  var host = document.getElementById('chart'); if(!host || !window.MODS) return;
+  var h = '<div class="scroll"><table class="gantt"><tr><th></th>';
+  WKS.forEach(function(w,i){ h += '<th>'+w+'<span>'+WKCAP[i]+'</span></th>'; });
+  h += '</tr>';
+  MODS.concat([TEAM]).forEach(function(m){
+    h += '<tr><th class="rowh" style="--c:'+m.c+'">'+SHORT[m.id]+'</th>';
+    var n = 0;
+    m.weeks.forEach(function(w,i){
+      var tot = w[1].length, d = 0;
+      for(var k=0;k<tot;k++){ var b = document.getElementById(m.id+'-'+(n+k)); if(b && b.checked) d++; }
+      n += tot;
+      h += '<td style="--c:'+m.c+'"><div class="cell"><b>'+MILE[m.id][i]+'</b><small>'+d+'/'+tot+' to-dos</small><i style="width:'+(tot?100*d/tot:0)+'%"></i></div></td>';
+    });
+    h += '</tr>';
+  });
+  host.innerHTML = h+'</table></div>';
+}
+function mount(list, host, withName){
+  list.forEach(function(m){
+    host.appendChild(render(m, withName));
+    document.querySelectorAll('input[data-m="'+m.id+'"]').forEach(function(b){
+      b.checked = store('sbd-'+b.id) === '1';
+      b.addEventListener('change', function(){ store('sbd-'+b.id, b.checked?'1':'0'); update(m); });
+    });
+    var nm = document.getElementById('name-'+m.id);
+    if(nm){ nm.value = store('sbd-name-'+m.id) || ''; nm.addEventListener('input', function(){ store('sbd-name-'+m.id, nm.value); }); }
+    update(m);
+  });
+}
+mount(MODS, document.getElementById('mods'), true);
+mount([TEAM], document.getElementById('team'), false);
+renderChart();
+</script>
+</body>
+</html>

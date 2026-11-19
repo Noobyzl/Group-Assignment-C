@@ -3,11 +3,6 @@
  * Options 1 and 5 read the hourly records (by month, and by exact timestamp).
  * Options 2, 3 and 4 look up rows of the scenario sweep table.
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <ctype.h>
 #include "search.h"
 #include "common.h"
 #include "Yield.h"

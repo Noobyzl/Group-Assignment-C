@@ -1,0 +1,5 @@
+tests/
+*.exe
+*.o
+output/
+debug_log.md

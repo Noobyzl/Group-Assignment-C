@@ -19,7 +19,6 @@
 #include "sweep.h"
 #include "impact.h"
 
-#include <math.h>
 
 /* BEST_MIN_OFFSET_PCT (the offset target used by best_index) is defined in
  * sweep.h so the demo/report can print it and the Python check can mirror it. */

@@ -18,7 +18,6 @@
 #include "common.h"
 #include "impact.h"
 
-#include <math.h>
 
 double co2_avoided_kg(double kwh)
 {

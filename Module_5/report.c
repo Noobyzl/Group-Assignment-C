@@ -7,9 +7,6 @@
  * export_csvs_with_config() is kept for callers that want CSV files, but the
  * main program no longer calls it.
  */
-#include <stdio.h>
-#include <string.h>
-#include <math.h>
 #include "report.h"
 #include "sweep.h"
 #include "Yield.h"
@@ -35,15 +32,6 @@ static char ds_warning[512] = "";
 
 static int selected_index = -1;     /* scenario the report is about, -1 = use the best-index rule */
 static int console_on = 1;          /* cleared when the user declines to continue */
-
-/* Print to the file, and to the console while console_on is set. */
-#define REPORT_LINE(...) \
-    do \
-    { \
-        fprintf(f, __VA_ARGS__); \
-        if (console_on) \
-            fprintf(stdout, __VA_ARGS__); \
-    } while (0)
 
 /* ---- dataset coverage ------------------------------------------------- */
 
@@ -209,11 +197,100 @@ static void next_section(const char *name)
 
 /* ---- report parts ----------------------------------------------------- */
 
+/* Each part is written by one function that prints to any stream. The caller
+ * prints it to the file, then to the console while console_on is set. */
+
+static void print_inputs(FILE *out, const SystemConfig *cfg)
+{
+    fprintf(out, "SOLAR BUILD DECISION PLANNER - SIMULATION REPORT\n");
+    fprintf(out, "================================================\n\n");
+
+    fprintf(out, "1. DATA AND INPUTS\n------------------\n");
+    fprintf(out, "Available site area: %.2f m2\n", cfg->area_m2);
+    fprintf(out, "Annual electricity use: %.2f kWh\n", cfg->annual_kwh);
+    if (cfg->monthly_bill_rm > 0.0)
+        fprintf(out, "Electricity tariff: TNB Domestic General Tariff (average RM %.4f/kWh at this use)\n", cfg->tariff_rm_kwh);
+    else
+        fprintf(out, "Electricity tariff: RM %.4f/kWh\n", cfg->tariff_rm_kwh);
+    fprintf(out, "Panel: %s\nRated power: %.1f W\nPanel dimensions: %.3f m x %.3f m\nPanel price: RM %.2f\n",
+            cfg->panel.name, cfg->panel.rated_w, cfg->panel.length_m, cfg->panel.width_m, cfg->panel.price_rm);
+    if (ds_records >= 0)
+    {
+        fprintf(out, "Dataset: %d records kept, %d rows dropped (bad timestamp), %d rows skipped (unusable values)\n",
+                ds_records, ds_dropped, ds_invalid);
+        fprintf(out, "Time step: %.2f h (from the file's timestamps); specific yield: %.1f kWh/kWp/year\n",
+                ds_step_h, ds_specific_yield);
+        if (ds_warning[0])
+            fprintf(out, "WARNING: %s\n", ds_warning);
+    }
+    fprintf(out, "Data source: %s\n", report_data_source);
+    fprintf(out, "Irradiance description: %s\n\n", report_irradiance_type);
+}
+
+static void print_scenario(FILE *out, const SimResult *res)
+{
+    char pbbuf[40];
+
+    fprintf(out, "2. SELECTED SCENARIO RESULTS\n----------------------------\n");
+    fprintf(out, "Panel count: %d\nSystem capacity: %.3f kWp\nAnnual generation: %.2f kWh\nEnergy offset: %.2f%%\n",
+            res->n_panels, res->kwp, res->annual_gen_kwh, res->offset_pct);
+    fprintf(out, "Initial cost: RM %.2f\nAnnual bill savings: RM %.2f\nSimple payback: %s\nCO2 avoided: %.2f kg/year\n\n",
+            res->capex_rm, res->saving_rm_per_year,
+            payback_text(res->payback_years, pbbuf, sizeof pbbuf), res->co2_avoided_kg);
+}
+
+static void print_verdict(FILE *out, const SimResult *res)
+{
+    fprintf(out, "3. VERDICT AND REASON\n---------------------\n");
+    fprintf(out, "Recommendation: %s\n", verdict_text(res->verdict));
+    fprintf(out, "Reason: %s\n", decide_reason(res->offset_pct, res->payback_years));
+    fprintf(out, "This is a screening estimate, not an engineering quotation. Confirm roof condition, shading, permits, wiring, and current installed cost before making a real purchase.\n");
+}
+
+static void print_sizing(FILE *out, const SystemConfig *cfg, const FaultSummary *fs,
+                         int target, int roof, int budget, int chosen)
+{
+    int least = target;
+
+    fprintf(out, "\n5. FAULT DETECTION AND SIZING\n-----------------------------\n");
+    fprintf(out, "Fault detector: %d of %d rows rejected (%d unusable, %d implausible irradiance); estimated energy loss %.2f kWh/kWp (%.2f%%).\n",
+            fs->faulty_rows, fs->rows_checked, fs->unusable_rows, fs->implausible_rows,
+            fs->loss_kwh_per_kwp, fs->loss_pct);
+    fprintf(out, "AC power is modelled from irradiance (no AC column in the dataset): kWp x G/1000 x %.2f.\n", PERF_RATIO);
+    fprintf(out, "Monthly bill: RM %.2f -> %.1f kWh/month (inverse of the TNB tariff); budget: RM %.2f.\n",
+            cfg->monthly_bill_rm, cfg->monthly_kwh, cfg->budget_rm);
+    fprintf(out, "Panels needed to cover the demand: %d | fit on roof: %d | affordable at RM %.2f/W: %d\n",
+            target, roof, INSTALL_COST_RM_PER_W_REPORT, budget);
+    if (roof < least)
+        least = roof;
+    if (budget < least)
+        least = budget;
+    if (chosen < least)
+        fprintf(out, "Chosen panel count = %d (limited to %d panels: the program caps a sweep at that size; the minimum of the three is %d)\n",
+                chosen, chosen, least);
+    else
+        fprintf(out, "Chosen panel count = min of the three = %d\n", chosen);
+}
+
+static void print_sweep(FILE *out, const SimResult sweep[], int n)
+{
+    int i;
+    char pbbuf[40];
+
+    fprintf(out, "\n4. SCENARIO SWEEP TABLE\n-----------------------\n");
+    fprintf(out, "Panels | kWp | Generation kWh | Offset %% | Capex RM | Savings RM/year | Payback years | CO2 kg | Verdict\n");
+    for (i = 0; i < n; ++i)
+        fprintf(out, "%d | %.3f | %.2f | %.2f | %.2f | %.2f | %s | %.2f | %s\n",
+                sweep[i].n_panels, sweep[i].kwp, sweep[i].annual_gen_kwh, sweep[i].offset_pct,
+                sweep[i].capex_rm, sweep[i].saving_rm_per_year,
+                payback_text(sweep[i].payback_years, pbbuf, sizeof pbbuf),
+                sweep[i].co2_avoided_kg, short_verdict(sweep[i].verdict));
+}
+
 /* Parts 1 to 3: data and inputs, selected scenario, verdict. */
 int write_report(const char *path, const SystemConfig *cfg, const SimResult *res)
 {
     FILE *f;
-    char pbbuf[40];
 
     if (!path || !cfg || !res)
         return (0);
@@ -223,43 +300,19 @@ int write_report(const char *path, const SystemConfig *cfg, const SimResult *res
     last_report_config = *cfg;
     have_report_config = 1;
     console_on = 1;
-    REPORT_LINE("SOLAR BUILD DECISION PLANNER - SIMULATION REPORT\n");
-    REPORT_LINE("================================================\n\n");
-
-    REPORT_LINE("1. DATA AND INPUTS\n------------------\n");
-    REPORT_LINE("Available site area: %.2f m2\n", cfg->area_m2);
-    REPORT_LINE("Annual electricity use: %.2f kWh\n", cfg->annual_kwh);
-    if (cfg->monthly_bill_rm > 0.0)
-        REPORT_LINE("Electricity tariff: TNB Domestic General Tariff (average RM %.4f/kWh at this use)\n", cfg->tariff_rm_kwh);
-    else
-        REPORT_LINE("Electricity tariff: RM %.4f/kWh\n", cfg->tariff_rm_kwh);
-    REPORT_LINE("Panel: %s\nRated power: %.1f W\nPanel dimensions: %.3f m x %.3f m\nPanel price: RM %.2f\n",
-                cfg->panel.name, cfg->panel.rated_w, cfg->panel.length_m, cfg->panel.width_m, cfg->panel.price_rm);
-    if (ds_records >= 0)
-    {
-        REPORT_LINE("Dataset: %d records kept, %d rows dropped (bad timestamp), %d rows skipped (unusable values)\n",
-                    ds_records, ds_dropped, ds_invalid);
-        REPORT_LINE("Time step: %.2f h (from the file's timestamps); specific yield: %.1f kWh/kWp/year\n",
-                    ds_step_h, ds_specific_yield);
-        if (ds_warning[0])
-            REPORT_LINE("WARNING: %s\n", ds_warning);
-    }
-    REPORT_LINE("Data source: %s\n", report_data_source);
-    REPORT_LINE("Irradiance description: %s\n\n", report_irradiance_type);
+    print_inputs(f, cfg);
+    if (console_on)
+        print_inputs(stdout, cfg);
 
     next_section("2. SELECTED SCENARIO RESULTS");
-    REPORT_LINE("2. SELECTED SCENARIO RESULTS\n----------------------------\n");
-    REPORT_LINE("Panel count: %d\nSystem capacity: %.3f kWp\nAnnual generation: %.2f kWh\nEnergy offset: %.2f%%\n",
-                res->n_panels, res->kwp, res->annual_gen_kwh, res->offset_pct);
-    REPORT_LINE("Initial cost: RM %.2f\nAnnual bill savings: RM %.2f\nSimple payback: %s\nCO2 avoided: %.2f kg/year\n\n",
-                res->capex_rm, res->saving_rm_per_year,
-                payback_text(res->payback_years, pbbuf, sizeof pbbuf), res->co2_avoided_kg);
+    print_scenario(f, res);
+    if (console_on)
+        print_scenario(stdout, res);
 
     next_section("3. VERDICT AND REASON");
-    REPORT_LINE("3. VERDICT AND REASON\n---------------------\n");
-    REPORT_LINE("Recommendation: %s\n", verdict_text(res->verdict));
-    REPORT_LINE("Reason: %s\n", decide_reason(res->offset_pct, res->payback_years));
-    REPORT_LINE("This is a screening estimate, not an engineering quotation. Confirm roof condition, shading, permits, wiring, and current installed cost before making a real purchase.\n");
+    print_verdict(f, res);
+    if (console_on)
+        print_verdict(stdout, res);
     if (fclose(f) != 0)
         return (0);
     return (1);
@@ -277,28 +330,9 @@ int append_planner_section(const char *path, const SystemConfig *cfg, const Faul
     if (!f)
         return (0);
     next_section("5. FAULT DETECTION AND SIZING");
-    REPORT_LINE("\n5. FAULT DETECTION AND SIZING\n-----------------------------\n");
-    REPORT_LINE("Fault detector: %d of %d rows rejected (%d unusable, %d implausible irradiance); estimated energy loss %.2f kWh/kWp (%.2f%%).\n",
-                fs->faulty_rows, fs->rows_checked, fs->unusable_rows, fs->implausible_rows,
-                fs->loss_kwh_per_kwp, fs->loss_pct);
-    REPORT_LINE("AC power is modelled from irradiance (no AC column in the dataset): kWp x G/1000 x %.2f.\n", PERF_RATIO);
-    REPORT_LINE("Monthly bill: RM %.2f -> %.1f kWh/month (inverse of the TNB tariff); budget: RM %.2f.\n",
-                cfg->monthly_bill_rm, cfg->monthly_kwh, cfg->budget_rm);
-    REPORT_LINE("Panels needed to cover the demand: %d | fit on roof: %d | affordable at RM %.2f/W: %d\n",
-                target, roof, INSTALL_COST_RM_PER_W_REPORT, budget);
-    {
-        int least = target;
-
-        if (roof < least)
-            least = roof;
-        if (budget < least)
-            least = budget;
-        if (chosen < least)
-            REPORT_LINE("Chosen panel count = %d (limited to %d panels: the program caps a sweep at that size; the minimum of the three is %d)\n",
-                        chosen, chosen, least);
-        else
-            REPORT_LINE("Chosen panel count = min of the three = %d\n", chosen);
-    }
+    print_sizing(f, cfg, fs, target, roof, budget, chosen);
+    if (console_on)
+        print_sizing(stdout, cfg, fs, target, roof, budget, chosen);
     return (fclose(f) == 0);
 }
 
@@ -306,8 +340,6 @@ int append_planner_section(const char *path, const SystemConfig *cfg, const Faul
 int append_sweep_table(const char *path, const SimResult sweep[], int n)
 {
     FILE *f;
-    int i;
-    char pbbuf[40];
 
     if (!path || !sweep || n <= 0)
         return (0);
@@ -315,14 +347,9 @@ int append_sweep_table(const char *path, const SimResult sweep[], int n)
     if (!f)
         return (0);
     next_section("4. SCENARIO SWEEP TABLE");
-    REPORT_LINE("\n4. SCENARIO SWEEP TABLE\n-----------------------\n");
-    REPORT_LINE("Panels | kWp | Generation kWh | Offset %% | Capex RM | Savings RM/year | Payback years | CO2 kg | Verdict\n");
-    for (i = 0; i < n; ++i)
-        REPORT_LINE("%d | %.3f | %.2f | %.2f | %.2f | %.2f | %s | %.2f | %s\n",
-                    sweep[i].n_panels, sweep[i].kwp, sweep[i].annual_gen_kwh, sweep[i].offset_pct,
-                    sweep[i].capex_rm, sweep[i].saving_rm_per_year,
-                    payback_text(sweep[i].payback_years, pbbuf, sizeof pbbuf),
-                    sweep[i].co2_avoided_kg, short_verdict(sweep[i].verdict));
+    print_sweep(f, sweep, n);
+    if (console_on)
+        print_sweep(stdout, sweep, n);
     return (fclose(f) == 0);
 }
 

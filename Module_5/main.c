@@ -2,11 +2,7 @@
  *   START -> 1 data loader -> 2 fault detector -> 3 user input -> bill >= RM 200?
  *   -> 4 energy & sizing -> 5 impact & sweep -> 6 report -> search loop -> END
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <errno.h>
-#include <math.h>
 #ifdef _WIN32
 #include <direct.h>
 #define MAKE_DIR(p)   _mkdir(p)
@@ -14,7 +10,7 @@
 #include <sys/stat.h>
 #define MAKE_DIR(p)   mkdir(p, 0777)
 #endif
-#include "common.h"
+#include "../common.h"
 #include "Yield.h"
 #include "Fault.h"
 #include "sweep.h"
