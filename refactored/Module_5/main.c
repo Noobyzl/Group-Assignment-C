@@ -25,7 +25,6 @@
 #define MAX_SWEEP_RESULTS   5000
 #define MAX_PANEL_OPTIONS   100
 #define PANELS_PATH         "datasets/panels.csv"
-#define DEFAULT_CSV         "datasets/Timeseries_5.700_101.840_E5_10deg_0deg_2019_2019.csv"
 #define OUTPUT_DIR          "output"
 #define REPORT_PATH         "output/report.txt"
 #define CONTINUE            (-1)    /* stage result: go on to the next stage */
@@ -38,8 +37,6 @@ typedef struct {
     Dataset ds;
     SystemConfig cfg;
     FaultSummary fault;
-    const char *csv_path;       /* dataset to load */
-    int user_file;              /* 1 when the dataset path came from the command line */
     int panel_count;
     double yield_per_kwp;       /* specific yield, kWh per kWp per year */
     int target;                 /* panels needed to cover the demand */
@@ -82,9 +79,9 @@ static int stage_load(Planner *pl)
         printf("Could not load the panel catalogue %s.\n", PANELS_PATH);
         return (1);
     }
-    if (load_csv(pl->csv_path, &pl->ds) != 0)
+    if (load_csv(&pl->ds) != 0)
     {
-        printf("Could not load the PVGIS dataset %s.\n", pl->csv_path);
+        printf("Could not load the PVGIS dataset.\n");
         return (1);
     }
     printf("Loaded %d panel types and %d hourly records (%d timestamp rows dropped).\n",
@@ -94,8 +91,6 @@ static int stage_load(Planner *pl)
     if (pl->ds.n < MIN_RECORDS)
         printf("WARNING: fewer than %d records; this does not meet the assignment minimum.\n", MIN_RECORDS);
     set_report_metadata(PVGIS_SOURCE, IRRADIANCE_TEXT);
-    if (pl->user_file)
-        set_report_source_file(pl->csv_path);
     return (CONTINUE);
 }
 
@@ -268,7 +263,7 @@ static int stage_search(Planner *pl)
 
 /* ---- main ------------------------------------------------------------- */
 
-int main(int argc, char **argv)
+int main(void)
 {
     static Planner pl;
     static int (*const stages[])(Planner *) = {
@@ -278,12 +273,6 @@ int main(int argc, char **argv)
     int code = CONTINUE;
     size_t i;
 
-    pl.csv_path = DEFAULT_CSV;
-    if (argc > 1)
-    {
-        pl.csv_path = argv[1];      /* optional dataset override for testing */
-        pl.user_file = 1;
-    }
     printf("============================================\n");
     printf("   RURAL SOLAR MICROGRID PLANNER\n");
     printf("============================================\n");

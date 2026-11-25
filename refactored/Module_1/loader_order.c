@@ -9,7 +9,7 @@ typedef struct {
 
 static long long time_key(const HourRecord *r)
 {
-    return ((((long long)r->year * 12 + r->month) * 32 + r->day) * 24 + r->hour) * 60 + r->minute;
+    return (((((long long)r->year * 12 + r->month) * 32 + r->day) * 24 + r->hour) * 60 + r->minute);
 }
 
 static int cmp_sortkey(const void *a, const void *b)

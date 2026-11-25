@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 620" width="820" height="620" font-family="DejaVu Sans, Arial, sans-serif" font-size="13">
+<rect width="820" height="620" fill="white"/><rect x="3" y="3" width="814" height="614" fill="none" stroke="black" stroke-width="2"/>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10" fill="none" stroke="black"/></marker></defs>
+<rect x="170.0" y="28.0" width="480" height="34" rx="6" fill="white" stroke="black"/>
+<text x="410" y="49" text-anchor="middle">Start and load panel catalogue (M1)</text>
+<line x1="410" y1="62.0" x2="410" y2="88.0" stroke="black" marker-end="url(#a)"/>
+<rect x="170.0" y="88.0" width="480" height="34" rx="6" fill="white" stroke="black"/>
+<text x="410" y="109" text-anchor="middle">Enter the CSV file name (M5 prompt, M1 loader)</text>
+<line x1="410" y1="122.0" x2="410" y2="148.0" stroke="black" marker-end="url(#a)"/>
+<polygon points="110.0,165 410,148.0 710.0,165 410,182.0" fill="white" stroke="black"/>
+<text x="725.0" y="169" font-size="11">No: stop</text>
+<text x="410" y="169" text-anchor="middle">File found in datasets/ folder? (M1)</text>
+<line x1="410" y1="182.0" x2="410" y2="208.0" stroke="black" marker-end="url(#a)"/>
+<rect x="170.0" y="208.0" width="480" height="34" rx="6" fill="white" stroke="black"/>
+<text x="410" y="229" text-anchor="middle">Load PVGIS CSV, check timestamps and estimated fault rows (M1 and M2)</text>
+<line x1="410" y1="242.0" x2="410" y2="268.0" stroke="black" marker-end="url(#a)"/>
+<rect x="170.0" y="268.0" width="480" height="34" rx="6" fill="white" stroke="black"/>
+<text x="410" y="289" text-anchor="middle">Read bill, area, budget and panel choice (M5)</text>
+<line x1="410" y1="302.0" x2="410" y2="328.0" stroke="black" marker-end="url(#a)"/>
+<polygon points="110.0,345 410,328.0 710.0,345 410,362.0" fill="white" stroke="black"/>
+<text x="725.0" y="349" font-size="11">No: stop</text>
+<text x="410" y="349" text-anchor="middle">Apply RM 200 eligibility test (M5)</text>
+<line x1="410" y1="362.0" x2="410" y2="388.0" stroke="black" marker-end="url(#a)"/>
+<rect x="170.0" y="388.0" width="480" height="34" rx="6" fill="white" stroke="black"/>
+<text x="410" y="409" text-anchor="middle">Calculate yield and feasible panel count (M2 and M3)</text>
+<line x1="410" y1="422.0" x2="410" y2="448.0" stroke="black" marker-end="url(#a)"/>
+<rect x="170.0" y="448.0" width="480" height="34" rx="6" fill="white" stroke="black"/>
+<text x="410" y="469" text-anchor="middle">Sweep configurations, savings and CO2 (M4)</text>
+<line x1="410" y1="482.0" x2="410" y2="508.0" stroke="black" marker-end="url(#a)"/>
+<rect x="170.0" y="508.0" width="480" height="34" rx="6" fill="white" stroke="black"/>
+<text x="410" y="529" text-anchor="middle">Apply build verdict, generate report and search (M3 and M5)</text>
+<line x1="410" y1="542.0" x2="410" y2="568.0" stroke="black" marker-end="url(#a)"/>
+<rect x="170.0" y="568.0" width="480" height="34" rx="6" fill="white" stroke="black"/>
+<text x="410" y="589" text-anchor="middle">End</text>
+</svg>

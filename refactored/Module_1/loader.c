@@ -20,7 +20,9 @@
  * the physical limits below is kept with valid = 0, like a blank value, and
  * counted; one summary line is printed at the end of the load.
  *
- * load_csv() returns 0 on success and -1 on any failure. On every call, ds is
+ * load_csv() asks the user for a file name and opens it inside datasets/ (a
+ * missing file or a name containing a path fails immediately).
+ * It returns 0 on success and -1 on any failure. On every call, ds is
  * reset first, so free_dataset() is always safe afterwards. Because of that
  * reset, a ds that already holds records MUST be freed before it is reloaded.
  *
@@ -186,24 +188,72 @@ static int read_all_lines(FILE *fp, Dataset *ds, LoadState *st)
     return (0);
 }
 
-int load_csv(const char *path, Dataset *ds)
+/* Ask the user for a dataset file name and build its path inside DATASET_DIR.
+ * 0 = path written to out, -1 = no usable name (input ended, too long, or the
+ * name tries to leave the dataset folder). */
+static int ask_dataset_path(char *out, size_t size)
+{
+    char name[LINE_BUF];
+    char *start;
+    int status;
+
+    printf("Enter the dataset file name (looked up in %s): ", DATASET_DIR);
+    fflush(stdout);
+    status = read_line(stdin, name, sizeof name);
+    if (status != READ_OK)
+    {
+        fprintf(stderr, "\nload_csv: no file name entered\n");
+        return (-1);
+    }
+    start = name;
+    while (isspace((unsigned char)*start))
+        start++;
+    {
+        char *end = start + strlen(start);
+
+        while (end > start && isspace((unsigned char)end[-1]))
+            *--end = '\0';
+    }
+    if (*start == '\0')
+    {
+        fprintf(stderr, "load_csv: no file name entered\n");
+        return (-1);
+    }
+    if (strpbrk(start, "/\\:"))
+    {
+        fprintf(stderr, "load_csv: enter only the file name, not a path\n");
+        return (-1);
+    }
+    if (strlen(DATASET_DIR) + strlen(start) + 1 > size)
+    {
+        fprintf(stderr, "load_csv: file name is too long\n");
+        return (-1);
+    }
+    sprintf(out, "%s%s", DATASET_DIR, start);
+    return (0);
+}
+
+/* The user types the file name and the file is looked up in DATASET_DIR.
+ * If it is not there, the load fails at once. */
+int load_csv(Dataset *ds)
 {
     FILE *fp;
     LoadState st = {0};
+    char full[LINE_BUF];
 
     if (!ds)
         return (-1);
     init_load(ds, &st);
-    if (!path)
+    if (ask_dataset_path(full, sizeof full) != 0)
         return (-1);
-    fp = fopen(path, "r");
+    fp = fopen(full, "r");
     if (!fp)
     {
-        fprintf(stderr, "load_csv: cannot open '%s'\n", path);
+        fprintf(stderr, "load_csv: file '%s' not found\n", full);
         return (-1);
     }
     if (read_all_lines(fp, ds, &st) != 0)
         return (-1);
     fclose(fp);
-    return (finish_load(path, ds, &st));
+    return (finish_load(full, ds, &st));
 }

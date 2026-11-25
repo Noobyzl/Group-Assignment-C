@@ -6,6 +6,8 @@
 #ifndef INPUT_H
 #define INPUT_H
 
+#include "../common.h"
+
 /* Asks until a valid number >= min_value is typed. */
 int ask_double(const char *prompt, double *value, double min_value);
 

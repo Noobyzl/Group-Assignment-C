@@ -1,9 +1,4 @@
 /* input.c - Module 5 (M5) console input helpers (split out of main.c). */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <math.h>
 #include "input.h"
 
 static int input_eof = 0;           /* set when stdin ends, so every prompt loop can stop */

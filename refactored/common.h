@@ -13,6 +13,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <limits.h>
+#include <errno.h>
 
 typedef struct {
     int    year, month, day, hour;
@@ -55,7 +56,7 @@ typedef struct {
 } SimResult;
 
 /* M1 loader.h (load_csv etc. in src/loader.c; load_panels in src/panels.c) */
-int  load_csv(const char *path, Dataset *ds);               /* returns 0 ok, -1 on any error */
+int  load_csv(Dataset *ds);               /* returns 0 ok, -1 on any error */
 int  load_panels(const char *path, Panel out[], int max);   /* returns count loaded */
 void free_dataset(Dataset *ds);
 

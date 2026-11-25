@@ -79,7 +79,10 @@ static int take_int(const char **p, int width, int *out)
     }
     if (!digits)
         return (-1);
-    *out = (int)(neg ? -v : v);
+    if (neg)
+        *out = (int)(-v);
+    else
+        *out = (int)v;
     *p = s;
     return (0);
 }
@@ -102,7 +105,9 @@ static int scan_compact(const char *s, int v[5])
         return (-1);
     if (take_int(&s, 2, &v[4]) != 0)
         v[4] = 0;
-    return (*s == '\0' ? 0 : -1);
+    if (*s == '\0')
+        return (0);
+    return (-1);
 }
 
 /* YYYY<sep>MM<sep>DD then a space or T, then HH:MM. sep is '-' or '/'. */
@@ -116,7 +121,9 @@ static int scan_separated(const char *s, char sep, int v[5])
     s++;
     if (take_int(&s, 0, &v[3]) || take_char(&s, ':') || take_int(&s, 0, &v[4]))
         return (-1);
-    return (*s == '\0' ? 0 : -1);
+    if (*s == '\0')
+        return (0);
+    return (-1);
 }
 
 /* Try the four accepted formats. 0 = one matched (numbers stored), -1 = none. */

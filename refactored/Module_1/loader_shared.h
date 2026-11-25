@@ -10,6 +10,8 @@
 #define LINE_BUF   1024      /* longest accepted line is LINE_BUF - 1 characters */
 #define MAX_COLS   32
 
+#define DATASET_DIR    "datasets/"   /* folder searched for the CSV the user names */
+
 #define READ_EOF       0
 #define READ_OK        1
 #define READ_TOO_LONG  2
